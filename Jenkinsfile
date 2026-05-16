@@ -8,35 +8,31 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Deploy via SSH using PEM file') {
+        stage('Deploy') {
             steps {
                 withCredentials([
                     file(credentialsId: 'ec2-pem-file', variable: 'PEM'),
                     string(credentialsId: 'ec2-host', variable: 'EC2_HOST')
                 ]) {
 
-                    sh """
-                        chmod 400 $PEM
+                    withEnv(["EC2_HOST=${EC2_HOST}"]) {
 
-                        ssh -i $PEM -o StrictHostKeyChecking=no ec2-user@$EC2_HOST '
-                            rm -rf ${REMOTE_DIR} &&
-                            mkdir -p ${REMOTE_DIR}
-                        '
+                        sh '''
+                            chmod 400 "$PEM"
 
-                        scp -i $PEM Dockerfile entrypoint.sh test-py.py \
-                            ec2-user@$EC2_HOST:${REMOTE_DIR}/
+                            ssh -i "$PEM" -o StrictHostKeyChecking=no ec2-user@$EC2_HOST "
+                                rm -rf /tmp/build && mkdir -p /tmp/build
+                            "
 
-                        ssh -i $PEM ec2-user@$EC2_HOST '
-                            cd ${REMOTE_DIR} &&
-                            bash /app/shellscript/compiler.sh latest ${SERVICE_NAME} docker
-                        '
-                    """
+                            scp -i "$PEM" Dockerfile entrypoint.sh test-py.py \
+                                ec2-user@$EC2_HOST:/tmp/build/
+
+                            ssh -i "$PEM" ec2-user@$EC2_HOST "
+                                cd /tmp/build &&
+                                bash /app/shellscript/compiler.sh latest python-api docker
+                            "
+                        '''
+                    }
                 }
             }
         }

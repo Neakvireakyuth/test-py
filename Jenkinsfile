@@ -6,7 +6,7 @@ pipeline {
 
         SERVICE_NAME = "python-api"
 
-        HARBOR_URL = "10.0.200.204:7200"
+        HARBOR_URL = "http://ec2-54-179-57-101.ap-southeast-1.compute.amazonaws.com:8080"
     }
 
     stages {
@@ -14,10 +14,7 @@ pipeline {
         stage('Checkout') {
 
             steps {
-
                 checkout scm
-
-                sh 'git fetch --tags'
             }
         }
 
@@ -28,13 +25,11 @@ pipeline {
                 script {
 
                     env.TAG_NAME = sh(
-                        script: '''
-                            git describe --tags --exact-match 2>/dev/null || echo latest
-                        ''',
+                        script: 'git describe --tags --exact-match || echo latest',
                         returnStdout: true
                     ).trim()
 
-                    echo "Detected Tag: ${env.TAG_NAME}"
+                    echo "Tag Name: ${env.TAG_NAME}"
                 }
             }
         }
@@ -43,33 +38,39 @@ pipeline {
 
             steps {
 
-                sh '''
-                    chmod +x compiler.sh
-                    ./compiler.sh ${TAG_NAME} ${SERVICE_NAME} pc
-                '''
+                sh """
+                    chmod +x /app/shellscript/compiler.sh
+
+                    /app/shellscript/compiler.sh \
+                    ${TAG_NAME} \
+                    ${SERVICE_NAME} \
+                    pc
+                """
             }
         }
 
         stage('Docker Build & Push') {
 
-            when {
-
-                expression {
-
-                    return env.TAG_NAME != "latest"
-                }
-            }
-
             steps {
 
-                sh '''
-                    ./compiler.sh ${TAG_NAME} ${SERVICE_NAME} docker
-                '''
+                sh """
+                    chmod +x /app/shellscript/compiler.sh
+
+                    /app/shellscript/compiler.sh \
+                    ${TAG_NAME} \
+                    ${SERVICE_NAME} \
+                    docker
+                """
             }
         }
     }
 
     post {
+
+        always {
+
+            deleteDir()
+        }
 
         success {
 
@@ -79,11 +80,6 @@ pipeline {
         failure {
 
             echo 'Pipeline failed.'
-        }
-
-        always {
-
-            cleanWs()
         }
     }
 }

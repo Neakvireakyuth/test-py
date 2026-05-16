@@ -6,7 +6,7 @@ pipeline {
 
         SERVICE_NAME = "python-api"
 
-        HARBOR_URL = "http://ec2-54-179-57-101.ap-southeast-1.compute.amazonaws.com:8080"
+        HARBOR_URL = "ec2-54-179-57-101.ap-southeast-1.compute.amazonaws.com:8080"
     }
 
     stages {
@@ -14,7 +14,28 @@ pipeline {
         stage('Checkout') {
 
             steps {
+
                 checkout scm
+            }
+        }
+
+        stage('Debug Workspace') {
+
+            steps {
+
+                sh '''
+                    echo "===== WORKSPACE ====="
+                    pwd
+
+                    echo "===== FILES ====="
+                    ls -la
+
+                    echo "===== SCRIPT CHECK ====="
+                    ls -la /app/shellscript
+
+                    echo "===== CONFIG CHECK ====="
+                    ls -la /opt/configs
+                '''
             }
         }
 
@@ -39,9 +60,6 @@ pipeline {
             steps {
 
                 sh """
-                    pwd
-                    ls
-                    chmod +x /app/shellscript/compiler.sh
                     /app/shellscript/compiler.sh \
                     ${TAG_NAME} \
                     ${SERVICE_NAME} \
@@ -55,8 +73,6 @@ pipeline {
             steps {
 
                 sh """
-                    chmod +x /app/shellscript/compiler.sh
-
                     /app/shellscript/compiler.sh \
                     ${TAG_NAME} \
                     ${SERVICE_NAME} \

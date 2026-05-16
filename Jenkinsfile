@@ -39,8 +39,9 @@ pipeline {
             steps {
 
                 sh """
+                    pwd
+                    ls
                     chmod +x /app/shellscript/compiler.sh
-
                     /app/shellscript/compiler.sh \
                     ${TAG_NAME} \
                     ${SERVICE_NAME} \

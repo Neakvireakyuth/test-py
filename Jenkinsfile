@@ -3,100 +3,49 @@ pipeline {
     agent any
 
     environment {
-
         SERVICE_NAME = "python-api"
-
-        HARBOR_URL = "ec2-54-179-57-101.ap-southeast-1.compute.amazonaws.com:8080"
+        REMOTE_DIR = "/tmp/build-${BUILD_NUMBER}"
+        SCRIPT_PATH = "/app/shellscript/compiler.sh"
     }
 
     stages {
 
         stage('Checkout') {
-
             steps {
-
                 checkout scm
             }
         }
 
-        stage('Debug Workspace') {
-
+        stage('Get Tag') {
             steps {
-
-                sh '''
-                    echo "===== WORKSPACE ====="
-                    pwd
-
-                    echo "===== FILES ====="
-                    ls -la
-
-                    echo "===== SCRIPT CHECK ====="
-                    ls -la /app/shellscript
-
-                    echo "===== CONFIG CHECK ====="
-                    ls -la /opt/configs
-                '''
-            }
-        }
-
-        stage('Get Git Tag') {
-
-            steps {
-
                 script {
-
                     env.TAG_NAME = sh(
                         script: 'git describe --tags --exact-match || echo latest',
                         returnStdout: true
                     ).trim()
-
-                    echo "Tag Name: ${env.TAG_NAME}"
                 }
             }
         }
 
-        stage('Pull Config') {
-
+        stage('Build on EC2') {
             steps {
+                sshagent(['ec2-prod']) {
 
-                sh """
-                    /app/shellscript/compiler.sh \
-                    ${TAG_NAME} \
-                    ${SERVICE_NAME} \
-                    pc
-                """
+                    sh """
+                        ssh -o StrictHostKeyChecking=no ec2-user@\$EC2_HOST '
+                            rm -rf ${REMOTE_DIR} &&
+                            mkdir -p ${REMOTE_DIR}
+                        '
+
+                        scp Dockerfile entrypoint.sh test-py.py ec2-user@\$EC2_HOST:${REMOTE_DIR}/
+
+                        ssh ec2-user@\$EC2_HOST '
+                            cd ${REMOTE_DIR} &&
+                            bash ${SCRIPT_PATH} "${TAG_NAME}" "${SERVICE_NAME}" docker
+                        '
+                    """
+                }
             }
-        }
-
-        stage('Docker Build & Push') {
-
-            steps {
-
-                sh """
-                    /app/shellscript/compiler.sh \
-                    ${TAG_NAME} \
-                    ${SERVICE_NAME} \
-                    docker
-                """
-            }
-        }
-    }
-
-    post {
-
-        always {
-
-            deleteDir()
-        }
-
-        success {
-
-            echo 'Pipeline completed successfully.'
-        }
-
-        failure {
-
-            echo 'Pipeline failed.'
         }
     }
 }

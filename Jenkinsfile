@@ -1,6 +1,9 @@
 pipeline {
-
     agent any
+
+    triggers {
+        githubPush()
+    }
 
     environment {
         SERVICE_NAME = "python-api"
@@ -16,12 +19,13 @@ pipeline {
         }
 
         stage('Get Tag') {
+            when {
+                buildingTag()
+            }
+
             steps {
                 script {
-                    env.TAG_NAME = sh(
-                        script: 'git describe --tags --exact-match || echo latest',
-                        returnStdout: true
-                    ).trim()
+                    env.TAG_NAME = env.TAG_NAME
 
                     echo "Tag: ${env.TAG_NAME}"
                 }
@@ -29,6 +33,9 @@ pipeline {
         }
 
         stage('Build on EC2') {
+            when {
+                buildingTag()
+            }
 
             steps {
 
@@ -38,36 +45,26 @@ pipeline {
                 ]) {
 
                     sh '''
-                        chmod 400 "$PEM"
+                    chmod 400 "$PEM"
 
-                        ssh -i "$PEM" -o StrictHostKeyChecking=no ec2-user@$EC2_HOST "
-                            rm -rf ${REMOTE_DIR}
-                            mkdir -p ${REMOTE_DIR}
-                        "
+                    ssh -i "$PEM" -o StrictHostKeyChecking=no ec2-user@$EC2_HOST "
+                        rm -rf ${REMOTE_DIR}
+                        mkdir -p ${REMOTE_DIR}
+                    "
 
-                        scp -i "$PEM" test-py.py \
-                            ec2-user@$EC2_HOST:${REMOTE_DIR}/
+                    scp -i "$PEM" test-py.py \
+                    ec2-user@$EC2_HOST:${REMOTE_DIR}/
 
-                        ssh -i "$PEM" ec2-user@$EC2_HOST "
-                            cd ${REMOTE_DIR}
+                    ssh -i "$PEM" ec2-user@$EC2_HOST "
+                        cd ${REMOTE_DIR}
 
-                            bash /app/shellscript/compiler.sh ${TAG_NAME} ${SERVICE_NAME} pc
+                        bash /app/shellscript/compiler.sh ${TAG_NAME} ${SERVICE_NAME} pc
 
-                            bash /app/shellscript/compiler.sh ${TAG_NAME} ${SERVICE_NAME} docker
-                        "
+                        bash /app/shellscript/compiler.sh ${TAG_NAME} ${SERVICE_NAME} docker
+                    "
                     '''
                 }
             }
-        }
-    }
-
-    post {
-        success {
-            echo 'Pipeline completed successfully.'
-        }
-
-        failure {
-            echo 'Pipeline failed.'
         }
     }
 }
